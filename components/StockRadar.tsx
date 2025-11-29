@@ -12,6 +12,26 @@ export const StockRadar: React.FC<Props> = ({ initialData }) => {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+// --- NUEVO INICIO: Lógica del modo automático ---
+const [isAutoMode, setIsAutoMode] = useState(false);
+
+React.useEffect(() => {
+  let intervalId: any;
+  
+  if (isAutoMode) {
+    // Configurado a 60000ms (1 minuto) para seguridad de la API
+    intervalId = setInterval(() => {
+      console.log("Auto-updating...");
+      handleUpdate();
+    }, 60000); 
+  }
+
+  return () => {
+    if (intervalId) clearInterval(intervalId);
+  };
+}, [isAutoMode]); // Se activa/desactiva al pulsar el botón
+// --- NUEVO FIN ---
+
   const handleUpdate = async () => {
     setLoading(true);
     try {
@@ -35,6 +55,7 @@ export const StockRadar: React.FC<Props> = ({ initialData }) => {
             {lastUpdated && <span className="ml-2 text-green-600 text-xs font-semibold">Updated: {lastUpdated.toLocaleTimeString()}</span>}
           </p>
         </div>
+
         <button
           onClick={handleUpdate}
           disabled={loading}
