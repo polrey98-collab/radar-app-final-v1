@@ -1,24 +1,16 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
+# Dependencias (carpetas pesadas)
 node_modules
 dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+
+# Logs de errores
+*.log
+npm-debug.log*
+
+# --- ZONA DE SEGURIDAD ---
+# Archivos que NUNCA deben subir a GitHub
+.env
+.env.local
+.env.development
+.env.test
+.env.production
