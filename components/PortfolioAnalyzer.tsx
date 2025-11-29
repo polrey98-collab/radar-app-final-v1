@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { PortfolioItem } from '../types';
 import { analyzePortfolio } from '../services/geminiService';
@@ -44,79 +43,125 @@ export const PortfolioAnalyzer: React.FC = () => {
 
   const parseData = (rows: any[]) => {
     const items: PortfolioItem[] = [];
-    console.log("Iniciando lectura inteligente... Filas:", rows.length);
+    console.log("Iniciando escaneo inteligente (Modo Búsqueda)... Filas:", rows.length);
 
-    // Detectar si hay cabecera (si la fila 0 columna 1 no es un número)
+    // Detección de cabecera
     let startIndex = 0;
     if (rows.length > 0 && typeof rows[0][0] === 'string' && isNaN(parseFloat(String(rows[0][1]).replace(',', '.')))) {
       startIndex = 1;
     }
 
+    // Helper para limpiar números
+    const cleanNumber = (val: any) => {
+       if (!val) return NaN;
+       let str = String(val).trim().replace(/["']/g, '');
+       if (str.includes('.') && str.includes(',')) {
+           str = str.replace(/\./g, ''); 
+       }
+       str = str.replace(',', '.');
+       return parseFloat(str);
+    };
+
     for (let i = startIndex; i < rows.length; i++) {
       const row = rows[i];
       
-      // Aseguramos que la fila tenga datos
       if (row.length >= 2) { 
+        // 1. El ISIN siempre es la primera columna
         const isin = String(row[0]).trim();
-        let quantity = 0;
-        let companyName = isin; // Por defecto el nombre es el ISIN
-
-        // Función auxiliar para limpiar números (quita comillas y cambia comas por puntos)
-        const cleanNumber = (val: any) => {
-           if (!val) return NaN;
-           // Convertir a string, quitar comillas y cambiar coma decimal por punto
-           const str = String(val).trim().replace(/["']/g, '').replace(',', '.');
-           return parseFloat(str);
-        };
-
-        // --- LÓGICA DE DETECCIÓN INTELIGENTE ---
         
-        // CASO A: Formato Largo (ISIN | Nombre | Cantidad) -> Típico de DEGIRO exportado
-        // Miramos si existe la columna 3 (índice 2) y si es un número válido
-        if (row.length >= 3) {
-            const qtyCandidate = cleanNumber(row[2]);
-            if (!isNaN(qtyCandidate) && qtyCandidate > 0) {
-                quantity = qtyCandidate;
-                companyName = String(row[1]).trim(); // La columna del medio es el nombre
-            } else {
-                // Si la columna 3 falla, probamos la 2 por si acaso (fallback)
-                const qtyCandidate2 = cleanNumber(row[1]);
-                if (!isNaN(qtyCandidate2)) quantity = qtyCandidate2;
+        // 2. BUSCADOR DE CANTIDAD (Desde el final hacia atrás)
+        let quantity = 0;
+        let quantityIndex = -1;
+
+        for (let j = row.length - 1; j > 0; j--) {
+            const val = cleanNumber(row[j]);
+            if (!isNaN(val) && val > 0) {
+                quantity = val;
+                quantityIndex = j;
+                break;
             }
-        } 
-        // CASO B: Formato Corto (ISIN | Cantidad)
-        else {
-            const qtyCandidate = cleanNumber(row[1]);
-            if (!isNaN(qtyCandidate)) quantity = qtyCandidate;
         }
 
-        // --- RESULTADO ---
+        // 3. RECONSTRUCCIÓN DEL NOMBRE
+        let companyName = isin;
+        if (quantityIndex > 1) {
+            const nameParts = row.slice(1, quantityIndex);
+            companyName = nameParts.join(' ').replace(/["']/g, '').trim();
+        } else if (quantityIndex === -1 && row.length >= 2) {
+             const val = cleanNumber(row[1]);
+             if (!isNaN(val)) quantity = val;
+        }
+
+        // --- VALIDACIÓN FINAL ---
         if (isin && isin.length > 5 && quantity > 0) {
-            // console.log(`✅ Fila ${i} OK:`, companyName, quantity);
             items.push({
                 isin: isin,
                 company: companyName,
                 quantity,
-                avgPrice: 0 // No lo usamos
+                avgPrice: 0
             });
-        } else {
-             // Solo mostramos warning si parece una fila de datos y no cabecera vacía
-             if (row.length > 0 && row[0]) {
-                 console.warn(`❌ Fila ${i} ignorada. Datos:`, row, "Cantidad detectada:", quantity);
-             }
         }
       }
     }
     
     if (items.length === 0) {
-        alert("No se encontraron acciones válidas. Revisa que el archivo tenga ISIN y Cantidad.");
+        alert("No se encontraron acciones válidas. Revisa el archivo.");
         setFileName(null);
-    } else {
-        console.log("Importación completada. Activos válidos:", items.length);
     }
     setPortfolio(items);
   };
-  // --- Main Render ---
+
+  const runAnalysis = async () => {
+    if (portfolio.length === 0) return;
+    setAnalyzing(true);
+    setProgress(0);
+    setErrorMsg(null);
+    
+    try {
+      const analyzed = await analyzePortfolio(portfolio, (p) => setProgress(p));
+      setPortfolio(analyzed);
+    } catch (e: any) {
+      console.error(e);
+      setErrorMsg(e.message || "Error en el análisis. Inténtalo de nuevo.");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const totalValue = portfolio.reduce((acc, curr) => {
+    const price = curr.currentPrice || 0; 
+    return acc + (price * curr.quantity);
+  }, 0);
+  
+  if (hasIsin === null) {
+    return (
+      <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center max-w-2xl mx-auto mt-10">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Verificación de Datos</h2>
+        <p className="text-lg text-gray-600 mb-8">
+          ¿El archivo de tu cartera contiene los códigos <strong>ISIN</strong>?
+        </p>
+        <div className="flex justify-center gap-6">
+          <button onClick={() => setHasIsin(true)} className="flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg">
+            <CheckCircle2 className="w-5 h-5" /> SÍ, contiene ISIN
+          </button>
+          <button onClick={() => setHasIsin(false)} className="flex items-center gap-2 px-8 py-4 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 border border-gray-200">
+            <X className="w-5 h-5" /> NO
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasIsin === false) {
+    return (
+      <div className="bg-white p-12 rounded-2xl shadow-sm border border-red-100 text-center max-w-2xl mx-auto mt-10">
+        <Ban className="w-8 h-8 text-red-500 mx-auto mb-6" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Análisis No Disponible</h2>
+        <p className="text-gray-600 mb-8">Se requiere código ISIN para el análisis.</p>
+        <button onClick={() => setHasIsin(null)} className="text-blue-600 font-semibold hover:underline">Volver a empezar</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -126,172 +171,80 @@ export const PortfolioAnalyzer: React.FC = () => {
              <div className="flex-1"></div>
         </div>
         <h2 className="text-3xl font-bold text-gray-900 mb-2">Optimizador de Cartera IA</h2>
-        <p className="text-gray-500 mb-8 max-w-2xl mx-auto">
-          Análisis de precisión basado en ISIN. Sube tu archivo para recibir consejos estratégicos.
-        </p>
+        <p className="text-gray-500 mb-8 max-w-2xl mx-auto">Análisis de precisión basado en ISIN.</p>
 
         {!fileName ? (
           <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 hover:bg-gray-50 transition-colors relative group">
-            <input
-              type="file"
-              accept=".csv, .xlsx, .xls"
-              onChange={handleFileUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            />
-            <div className="transform group-hover:scale-105 transition-transform duration-300">
-                <FileSpreadsheet className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-            </div>
+            <input type="file" accept=".csv, .xlsx, .xls" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+            <FileSpreadsheet className="w-16 h-16 text-blue-500 mx-auto mb-4" />
             <p className="text-lg font-medium text-gray-700">Arrastra tu archivo Excel o CSV aquí</p>
-            <div className="mt-6 flex justify-center gap-2 text-xs text-gray-500 bg-gray-100 py-2 px-4 rounded-lg inline-block">
-               <span className="font-mono">Columna 1: ISIN | Columna 2: Cantidad</span>
-            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg text-blue-700 border border-blue-100">
                 <FileSpreadsheet className="w-5 h-5" />
                 <span className="font-medium">{fileName}</span>
-                <span className="text-sm opacity-75">({portfolio.length} activos detectados)</span>
-                <button 
-                  onClick={() => { setFileName(null); setPortfolio([]); setErrorMsg(null); }}
-                  className="ml-2 hover:bg-blue-200 p-1 rounded-full transition-colors"
-                >
-                    <X className="w-4 h-4" />
-                </button>
+                <button onClick={() => { setFileName(null); setPortfolio([]); setErrorMsg(null); }} className="ml-2 hover:bg-blue-200 p-1 rounded-full"><X className="w-4 h-4" /></button>
             </div>
-            
-            {errorMsg && (
-                <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg border border-red-200 flex items-center gap-2 max-w-lg">
-                    <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                    <span className="text-sm">{errorMsg}</span>
-                </div>
-            )}
+            {errorMsg && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg border border-red-200">{errorMsg}</div>}
 
-            <button
-              onClick={runAnalysis}
-              disabled={analyzing}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg shadow-blue-200 flex items-center gap-2 transition-all transform hover:-translate-y-0.5"
-            >
+            <button onClick={runAnalysis} disabled={analyzing} className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg flex items-center gap-2">
               {analyzing ? <RefreshCw className="animate-spin" /> : <TrendingUp />}
               {analyzing ? `Analizando (${progress}%)...` : 'Analizar Cartera'}
             </button>
-            {analyzing && (
-              <div className="w-64 h-1.5 bg-gray-200 rounded-full overflow-hidden mt-2">
-                 <div className="h-full bg-blue-500 transition-all duration-300" style={{width: `${progress}%`}}></div>
-              </div>
-            )}
-            {analyzing && (
-                <p className="text-xs text-gray-400 mt-2 max-w-md">
-                    Analizando 1 a 1 para asegurar precisión y cumplir límites de API. Esto puede tardar unos segundos por activo.
-                </p>
-            )}
           </div>
         )}
       </div>
 
       {portfolio.length > 0 && (
         <>
-          {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <div className="flex items-center gap-2 text-gray-500 mb-2">
-                 <Wallet className="w-4 h-4" />
-                 <span className="text-sm font-medium uppercase">Valor Total Cartera</span>
-              </div>
-              <p className="text-3xl font-bold text-gray-900">
-                  {portfolio.some(p => p.currentPrice) ? totalValue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }) : '---'}
-              </p>
-              {!portfolio.some(p => p.currentPrice) && <span className="text-xs text-orange-500">Esperando análisis ISIN</span>}
+              <div className="flex items-center gap-2 text-gray-500 mb-2"><Wallet className="w-4 h-4" /><span className="text-sm font-medium uppercase">Valor Total</span></div>
+              <p className="text-3xl font-bold text-gray-900">{portfolio.some(p => p.currentPrice) ? totalValue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }) : '---'}</p>
             </div>
-
             {portfolio[0].action && (
               <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-xl shadow-lg text-white">
-                <div className="flex items-center gap-2 text-blue-100 mb-2">
-                   <Lightbulb className="w-4 h-4" />
-                   <span className="text-sm font-medium uppercase">Estrategia IA</span>
-                </div>
-                <p className="text-lg font-medium">
-                   {portfolio.filter(p => p.action === 'ACUMULAR').length} activos señalizados para ACUMULAR.
-                </p>
+                <div className="flex items-center gap-2 text-blue-100 mb-2"><Lightbulb className="w-4 h-4" /><span className="text-sm font-medium uppercase">Estrategia</span></div>
+                <p className="text-lg font-medium">{portfolio.filter(p => p.action === 'ACUMULAR').length} activos para ACUMULAR.</p>
               </div>
             )}
           </div>
 
-          {/* Detailed Table */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto max-h-[600px] overflow-y-auto relative">
             <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 border-b text-gray-500 uppercase text-xs">
+              <thead className="sticky top-0 z-10 bg-gray-50 border-b text-gray-500 uppercase text-xs shadow-sm">
                 <tr>
                   <th className="px-6 py-4">ISIN / Empresa</th>
                   <th className="px-6 py-4 text-right">Acciones</th>
-                  <th className="px-6 py-4 text-right text-blue-600 font-bold">Precio (EUR)</th>
-                  <th className="px-6 py-4 text-right font-bold bg-gray-50 border-l border-gray-200">Valor Total</th>
+                  <th className="px-6 py-4 text-right text-blue-600 font-bold">Precio</th>
+                  <th className="px-6 py-4 text-right font-bold bg-gray-50 border-l border-gray-200">Total</th>
                   <th className="px-6 py-4 text-center">Acción</th>
-                  <th className="px-6 py-4">Previsión 3-5 Años</th>
+                  <th className="px-6 py-4">Previsión</th>
                   <th className="px-6 py-4">Optimización</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {portfolio.map((item, i) => {
-                  const positionValue = (item.currentPrice || 0) * item.quantity;
-                  
-                  return (
+                {portfolio.map((item, i) => (
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="font-bold text-gray-900 text-base">{item.company}</div>
                         <div className="text-xs text-gray-400 font-mono mt-0.5">{item.isin}</div>
                       </td>
-                      
-                      <td className="px-6 py-4 text-right text-gray-600">
-                        {item.quantity}
-                      </td>
-                      
-                      <td className="px-6 py-4 text-right font-mono text-base">
-                         {item.currentPrice ? (
-                           <span className="text-blue-700 font-bold">
-                             {item.currentPrice.toFixed(2)}
-                           </span>
-                         ) : '-'}
-                      </td>
-
-                      <td className="px-6 py-4 text-right font-mono font-bold bg-gray-50 border-l border-gray-100">
-                        {item.currentPrice ? positionValue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }) : '-'}
-                      </td>
-                      
+                      <td className="px-6 py-4 text-right text-gray-600">{item.quantity}</td>
+                      <td className="px-6 py-4 text-right font-mono text-base text-blue-700 font-bold">{item.currentPrice ? item.currentPrice.toFixed(2) : '-'}</td>
+                      <td className="px-6 py-4 text-right font-mono font-bold bg-gray-50 border-l border-gray-100">{(item.currentPrice || 0) * item.quantity > 0 ? ((item.currentPrice || 0) * item.quantity).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }) : '-'}</td>
                       <td className="px-6 py-4 text-center">
                         {item.action ? (
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide
-                            ${item.action === 'ACUMULAR' ? 'bg-green-100 text-green-700 border border-green-200' : 
-                              item.action === 'VENDER' ? 'bg-red-100 text-red-700 border border-red-200' : 
-                              'bg-yellow-100 text-yellow-700 border border-yellow-200'}
-                          `}>
-                            {item.action === 'ACUMULAR' && <TrendingUp className="w-3 h-3" />}
-                            {item.action === 'VENDER' && <AlertTriangle className="w-3 h-3" />}
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${item.action === 'ACUMULAR' ? 'bg-green-100 text-green-700' : item.action === 'VENDER' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                             {item.action}
                           </span>
-                        ) : (
-                          <span className="text-gray-400 text-xs italic">...</span>
-                        )}
+                        ) : '...'}
                       </td>
-                      <td className="px-6 py-4">
-                        {item.forecast3to5Years ? (
-                          <div className="flex items-start gap-2 max-w-[150px]">
-                             <ArrowRight className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                             <span className="text-gray-700 font-medium text-xs">{item.forecast3to5Years}</span>
-                          </div>
-                        ) : '-'}
-                      </td>
-                      <td className="px-6 py-4">
-                        {item.optimizationTip ? (
-                          <div className="flex items-start gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100 max-w-[150px]">
-                             <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                             <span className="text-gray-600 text-[10px] leading-tight">{item.optimizationTip}</span>
-                          </div>
-                        ) : '-'}
-                      </td>
+                      <td className="px-6 py-4">{item.forecast3to5Years || '-'}</td>
+                      <td className="px-6 py-4">{item.optimizationTip || '-'}</td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>
