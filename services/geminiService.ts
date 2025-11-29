@@ -213,15 +213,27 @@ export const analyzePortfolio = async (items: PortfolioItem[], onProgress?: (per
       
       // Simplified prompt to reduce token count and strictly focus on one task
       const prompt = `
-Analiza esta cartera: ${JSON.stringify(portfolioData)}.
+Analiza la siguiente cartera: ${JSON.stringify(portfolioData)}.
 
-Devuelve un JSON estricto array de objetos con:
+TU ROL: Analista Cuantitativo de Hedge Fund.
+
+INSTRUCCIONES DE MONEDA (CRÍTICO):
+⚠️ TODOS los precios deben ser en EUROS (€). Si cotiza en USD/GBP, convierte el precio.
+
+REGLAS PARA LA ACCIÓN (Lógica Stock Radar):
+1. Estima un "Precio de Entrada Ideal" (Soporte fuerte/Valor intrínseco) y un "Precio Objetivo de Venta" (Resistencia/Sobrevaloración).
+2. Si Precio Actual <= Precio Entrada -> Action: "ACUMULAR"
+3. Si Precio Actual >= Precio Objetivo -> Action: "VENDER"
+4. Si está en medio -> Action: "MANTENER"
+
+FORMATO DE RESPUESTA JSON (Estricto):
+Devuelve un array de objetos con:
 {
-  "isin": "...",
+  "isin": "ISIN original",
   "action": "ACUMULAR | VENDER | MANTENER",
-  "currentPrice": (número),
-  "forecast3to5Years": "Proyección realista basada en el sector. Sé crítico si está sobrevalorada. Ej: 'Saturación de mercado, crecimiento limitado al 3%'",
-  "optimizationTip": "Una acción táctica clara de menos de 15 palabras. Ej: 'Sobreponderada en cartera, vender mitad de posición' o 'Aprovechar caídas para promediar'"
+  "currentPrice": (Número en EUR),
+  "forecast3to5Years": "FORMATO CORTO: 'Tendencia: [Alcista/Bajista/Lateral] | CAGR est.: [XX]% anual'. (Máx 10 palabras)",
+  "optimizationTip": "FORMATO TÁCTICO: 'Entrada ideal: [XX]€ | Salida: [XX]€ | [Motivo corto]'. (Máx 15 palabras)"
 }
 `;
 

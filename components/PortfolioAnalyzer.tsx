@@ -241,8 +241,41 @@ export const PortfolioAnalyzer: React.FC = () => {
                           </span>
                         ) : '...'}
                       </td>
-                      <td className="px-6 py-4">{item.forecast3to5Years || '-'}</td>
-                      <td className="px-6 py-4">{item.optimizationTip || '-'}</td>
+                      {/* COLUMNA PREVISIÓN MEJORADA */}
+                      <td className="px-6 py-4">
+                        {item.forecast3to5Years ? (
+                          <div className="flex flex-col gap-1">
+                             {/* Detectamos palabras clave para colorear */}
+                             <div className={`text-xs font-bold uppercase tracking-wider mb-1
+                               ${item.forecast3to5Years.includes('Alcista') ? 'text-green-600' : 
+                                 item.forecast3to5Years.includes('Bajista') ? 'text-red-600' : 'text-gray-500'}
+                             `}>
+                               {item.forecast3to5Years.split('|')[0]} {/* Muestra solo la Tendencia */}
+                             </div>
+                             <div className="flex items-center gap-1 text-gray-700 text-xs bg-gray-50 p-1.5 rounded border border-gray-100">
+                                <TrendingUp className="w-3 h-3 text-blue-500" />
+                                <span>{item.forecast3to5Years.split('|')[1] || item.forecast3to5Years}</span>
+                             </div>
+                          </div>
+                        ) : '-'}
+                      </td>
+
+                      {/* COLUMNA OPTIMIZACIÓN (ZONAS CLAVE) */}
+                      <td className="px-6 py-4">
+                        {item.optimizationTip ? (
+                          <div className="group relative">
+                            <div className="flex flex-col gap-1.5 p-2 rounded-lg border border-dashed border-blue-200 bg-blue-50/50 hover:bg-blue-50 transition-colors">
+                               <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono uppercase">
+                                  <Lightbulb className="w-3 h-3 text-amber-500" />
+                                  <span>Estrategia</span>
+                               </div>
+                               <span className="text-xs font-medium text-gray-800 leading-tight">
+                                 {item.optimizationTip}
+                               </span>
+                            </div>
+                          </div>
+                        ) : '-'}
+                      </td>
                     </tr>
                 ))}
               </tbody>
