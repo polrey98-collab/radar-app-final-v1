@@ -213,29 +213,29 @@ export const analyzePortfolio = async (items: PortfolioItem[], onProgress?: (per
       
       // Simplified prompt to reduce token count and strictly focus on one task
       const prompt = `
-Analiza la siguiente cartera: ${JSON.stringify(portfolioData)}.
-
-TU ROL: Analista Cuantitativo de Hedge Fund.
-
-INSTRUCCIONES DE MONEDA (CRÍTICO):
-⚠️ TODOS los precios deben ser en EUROS (€). Si cotiza en USD/GBP, convierte el precio.
-
-REGLAS PARA LA ACCIÓN (Lógica Stock Radar):
-1. Estima un "Precio de Entrada Ideal" (Soporte fuerte/Valor intrínseco) y un "Precio Objetivo de Venta" (Resistencia/Sobrevaloración).
-2. Si Precio Actual <= Precio Entrada -> Action: "ACUMULAR"
-3. Si Precio Actual >= Precio Objetivo -> Action: "VENDER"
-4. Si está en medio -> Action: "MANTENER"
-
-FORMATO DE RESPUESTA JSON (Estricto):
-Devuelve un array de objetos con:
-{
-  "isin": "ISIN original",
-  "action": "ACUMULAR | VENDER | MANTENER",
-  "currentPrice": (Número en EUR),
-  "forecast3to5Years": "FORMATO CORTO: 'Tendencia: [Alcista/Bajista/Lateral] | CAGR est.: [XX]% anual'. (Máx 10 palabras)",
-  "optimizationTip": "FORMATO TÁCTICO: 'Entrada ideal: [XX]€ | Salida: [XX]€ | [Motivo corto]'. (Máx 15 palabras)"
-}
-`;
+      Analiza la siguiente cartera de inversión: ${JSON.stringify(portfolioData)}.
+      
+      TU ROL: Gestor de Patrimonios Senior (Wealth Manager).
+      TU FILOSOFÍA: Inversión a largo plazo, calidad y dividendos. Ignora el ruido de corto plazo.
+      
+      INSTRUCCIONES DE MONEDA:
+      ⚠️ TODOS los precios deben ser convertidos a EUROS (€).
+      
+      NUEVA LÓGICA DE ACCIÓN (Estratégica):
+      - "ACUMULAR": Solo si la empresa es de altísima calidad Y está a buen precio.
+      - "MANTENER": La opción por defecto para empresas sólidas que pagan dividendo (ej: Utilities, Bancos sanos), aunque no vayan a subir mucho. NO SUGIERAS VENDER solo porque el precio no suba.
+      - "VENDER": Solo ante deterioro grave del negocio o sobrevaloración extrema (+50% de su valor real).
+      
+      FORMATO DE RESPUESTA JSON (Estricto):
+      Devuelve un array de objetos con:
+      {
+        "isin": "ISIN original",
+        "action": "ACUMULAR | VENDER | MANTENER",
+        "currentPrice": (Número en EUR),
+        "forecast3to5Years": "Proyección fundamental. Ej: 'Estable por dividendos' o 'Crecimiento del 10% anual'. (Máx 10 palabras)",
+        "optimizationTip": "Consejo de gestión. Ej: 'Reinvertir dividendos' o 'Vigilar deuda'. (Máx 15 palabras)"
+      }
+      `;
 
       try {
         // Increased delay to 6 seconds to strictly adhere to free tier rate limits (~10 requests/min safe zone)
