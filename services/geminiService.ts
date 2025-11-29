@@ -213,28 +213,17 @@ export const analyzePortfolio = async (items: PortfolioItem[], onProgress?: (per
       
       // Simplified prompt to reduce token count and strictly focus on one task
       const prompt = `
-        Actúa como experto financiero.
-        
-        TAREA:
-        1. Busca el PRECIO DE MERCADO ACTUAL (EUR) para: ISIN ${isinCode} (${companyName}).
-        2. Determina acción: VENDER, ACUMULAR, MANTENER.
-        3. Breve previsión 3-5 años y consejo.
+Analiza esta cartera: ${JSON.stringify(portfolioData)}.
 
-        REGLAS:
-        - Prioriza mercados europeos.
-        - Convierte a EUR si es necesario.
-        - Retorna un ÚNICO objeto JSON en un array.
-
-        JSON ESPERADO:
-        [{
-            "isin": "${isinCode}",
-            "company": "${companyName}",
-            "currentPrice": number | null,
-            "action": "VENDER" | "ACUMULAR" | "MANTENER",
-            "forecast3to5Years": "string",
-            "optimizationTip": "string"
-        }]
-      `;
+Devuelve un JSON estricto array de objetos con:
+{
+  "isin": "...",
+  "action": "ACUMULAR | VENDER | MANTENER",
+  "currentPrice": (número),
+  "forecast3to5Years": "Proyección realista basada en el sector. Sé crítico si está sobrevalorada. Ej: 'Saturación de mercado, crecimiento limitado al 3%'",
+  "optimizationTip": "Una acción táctica clara de menos de 15 palabras. Ej: 'Sobreponderada en cartera, vender mitad de posición' o 'Aprovechar caídas para promediar'"
+}
+`;
 
       try {
         // Increased delay to 6 seconds to strictly adhere to free tier rate limits (~10 requests/min safe zone)
