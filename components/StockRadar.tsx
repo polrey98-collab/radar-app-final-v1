@@ -47,9 +47,9 @@ export const StockRadar: React.FC<Props> = ({ initialData }) => {
         </button>
       </div>
 
-      <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="overflow-x-auto max-h-[600px] overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-100 relative">
         <table className="w-full text-sm text-left">
-          <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+        <thead className="sticky top-0 z-10 text-xs text-gray-500 uppercase bg-gray-50 border-b shadow-sm">
             <tr>
               <th className="px-6 py-4 font-medium">Company</th>
               <th className="px-6 py-4 font-medium text-gray-400">Ref Price (PDF)</th>
