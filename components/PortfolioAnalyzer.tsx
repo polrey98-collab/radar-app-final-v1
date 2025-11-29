@@ -44,146 +44,78 @@ export const PortfolioAnalyzer: React.FC = () => {
 
   const parseData = (rows: any[]) => {
     const items: PortfolioItem[] = [];
+    console.log("Iniciando lectura inteligente... Filas:", rows.length);
 
-    // Skip header if first row looks like text headers
+    // Detectar si hay cabecera (si la fila 0 columna 1 no es un número)
     let startIndex = 0;
-    if (rows.length > 0 && typeof rows[0][0] === 'string' && isNaN(parseFloat(rows[0][1]))) {
+    if (rows.length > 0 && typeof rows[0][0] === 'string' && isNaN(parseFloat(String(rows[0][1]).replace(',', '.')))) {
       startIndex = 1;
     }
 
     for (let i = startIndex; i < rows.length; i++) {
       const row = rows[i];
+      
+      // Aseguramos que la fila tenga datos
       if (row.length >= 2) { 
-        // Expecting Format: ISIN | Quantity
-        // OR: ISIN | CompanyName | Quantity (Common format)
-
-        const col0 = String(row[0]).trim(); // Typically ISIN
-        const col1 = String(row[1]).trim();
-        
-        // Simple check: ISIN is typically alpha-numeric.
-        const isin = col0;
-        
-        // Logic to detect Name vs Quantity in Col 1 vs Col 2
+        const isin = String(row[0]).trim();
         let quantity = 0;
-        let companyName = isin; // Default to ISIN, AI will fix name
-        let purchasePrice = 0;
+        let companyName = isin; // Por defecto el nombre es el ISIN
 
-        const val1 = parseFloat(col1.replace(',', '.'));
+        // Función auxiliar para limpiar números (quita comillas y cambia comas por puntos)
+        const cleanNumber = (val: any) => {
+           if (!val) return NaN;
+           // Convertir a string, quitar comillas y cambiar coma decimal por punto
+           const str = String(val).trim().replace(/["']/g, '').replace(',', '.');
+           return parseFloat(str);
+        };
+
+        // --- LÓGICA DE DETECCIÓN INTELIGENTE ---
         
-        if (isNaN(val1)) {
-            // Col 1 is NOT a number, likely Company Name
-            // Then Col 2 must be Quantity
-            companyName = col1;
-            
-            const col2 = String(row[2]).trim();
-            const val2 = parseFloat(col2.replace(',', '.'));
-            if (!isNaN(val2)) {
-                quantity = val2;
+        // CASO A: Formato Largo (ISIN | Nombre | Cantidad) -> Típico de DEGIRO exportado
+        // Miramos si existe la columna 3 (índice 2) y si es un número válido
+        if (row.length >= 3) {
+            const qtyCandidate = cleanNumber(row[2]);
+            if (!isNaN(qtyCandidate) && qtyCandidate > 0) {
+                quantity = qtyCandidate;
+                companyName = String(row[1]).trim(); // La columna del medio es el nombre
+            } else {
+                // Si la columna 3 falla, probamos la 2 por si acaso (fallback)
+                const qtyCandidate2 = cleanNumber(row[1]);
+                if (!isNaN(qtyCandidate2)) quantity = qtyCandidate2;
             }
-        } else {
-            // Col 1 IS a number, likely Quantity. 
-            // So format was ISIN | Quantity
-            quantity = val1;
+        } 
+        // CASO B: Formato Corto (ISIN | Cantidad)
+        else {
+            const qtyCandidate = cleanNumber(row[1]);
+            if (!isNaN(qtyCandidate)) quantity = qtyCandidate;
         }
 
-        if (isin && quantity > 0) {
+        // --- RESULTADO ---
+        if (isin && isin.length > 5 && quantity > 0) {
+            // console.log(`✅ Fila ${i} OK:`, companyName, quantity);
             items.push({
                 isin: isin,
                 company: companyName,
                 quantity,
-                avgPrice: purchasePrice // Keeping 0 as we don't use it anymore
+                avgPrice: 0 // No lo usamos
             });
+        } else {
+             // Solo mostramos warning si parece una fila de datos y no cabecera vacía
+             if (row.length > 0 && row[0]) {
+                 console.warn(`❌ Fila ${i} ignorada. Datos:`, row, "Cantidad detectada:", quantity);
+             }
         }
       }
     }
     
     if (items.length === 0) {
-        alert("No se encontraron datos válidos. El archivo debe contener al menos columnas con ISIN y Cantidad.");
+        alert("No se encontraron acciones válidas. Revisa que el archivo tenga ISIN y Cantidad.");
         setFileName(null);
+    } else {
+        console.log("Importación completada. Activos válidos:", items.length);
     }
     setPortfolio(items);
   };
-
-  const runAnalysis = async () => {
-    if (portfolio.length === 0) return;
-    setAnalyzing(true);
-    setProgress(0);
-    setErrorMsg(null);
-    
-    try {
-      // Pass the progress callback
-      const analyzed = await analyzePortfolio(portfolio, (p) => setProgress(p));
-      
-      // Check if any prices were actually updated
-      const hasUpdates = analyzed.some(item => item.currentPrice !== undefined && item.currentPrice !== null);
-      if (!hasUpdates) {
-          console.warn("Analysis completed but no prices found.");
-      }
-
-      setPortfolio(analyzed);
-    } catch (e: any) {
-      console.error(e);
-      setErrorMsg(e.message || "Error en el análisis. Inténtalo de nuevo.");
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  // Calculations
-  const totalValue = portfolio.reduce((acc, curr) => {
-    const price = curr.currentPrice || 0; 
-    return acc + (price * curr.quantity);
-  }, 0);
-  
-  // --- Render Logic for Pre-Check ---
-
-  if (hasIsin === null) {
-    return (
-      <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center max-w-2xl mx-auto mt-10">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Verificación de Datos</h2>
-        <p className="text-lg text-gray-600 mb-8">
-          ¿El archivo de tu cartera contiene los códigos <strong>ISIN</strong> (International Securities Identification Number) de las empresas?
-        </p>
-        <div className="flex justify-center gap-6">
-          <button 
-            onClick={() => setHasIsin(true)}
-            className="flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-200 transform hover:-translate-y-1"
-          >
-            <CheckCircle2 className="w-5 h-5" />
-            SÍ, contiene ISIN
-          </button>
-          <button 
-            onClick={() => setHasIsin(false)}
-            className="flex items-center gap-2 px-8 py-4 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all border border-gray-200"
-          >
-            <X className="w-5 h-5" />
-            NO
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (hasIsin === false) {
-    return (
-      <div className="bg-white p-12 rounded-2xl shadow-sm border border-red-100 text-center max-w-2xl mx-auto mt-10">
-        <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Ban className="w-8 h-8" />
-        </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Análisis No Disponible</h2>
-        <p className="text-gray-600 mb-8">
-          Para garantizar la precisión de los cálculos de mercado y la valoración de tu patrimonio, el sistema <strong>requiere estrictamente</strong> el código ISIN de cada activo. Sin este identificador, no podemos proceder con el análisis fiable.
-        </p>
-        <button 
-          onClick={() => setHasIsin(null)}
-          className="text-blue-600 font-semibold hover:underline"
-        >
-          Volver a empezar
-        </button>
-      </div>
-    );
-  }
-
   // --- Main Render ---
 
   return (
